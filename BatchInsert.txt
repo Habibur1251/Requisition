@@ -1,0 +1,40 @@
+USE [VAT_TAX]
+GO
+/****** Object:  StoredProcedure [dbo].[sp_InsertMusukInf]    Script Date: 07/12/2014 15:27:54 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER procedure [dbo].[sp_InsertMusukInf]
+(@doc varchar(max),
+ @WhatToDo varchar(20)='insert'
+)
+as
+begin
+  declare @hDoc int
+  exec sp_xml_preparedocument @hDoc OUTPUT,@doc
+	BEGIN TRANSACTION SaveTry
+		BEGIN TRY
+			if @WhatToDo='insert'
+			begin
+				--Save to InvestmentTran Details Table
+				insert into TranMusukDtl (MusukID,ProductID,TP,VAT,TPAmount,VATAmount,BatchNo,Quantity)
+				select xml.MusukID,xml.ProductID,xml.TP,xml.VAT,xml.TPAmount,xml.VATAmount,xml.BatchNo,xml.Quantity
+				from OPENXML(@hDoc,'//TranMusukDtl')
+				with(MusukID int,ProductID int,TP real,VAT real,TPAmount real,VATAmount real,BatchNo varchar(10),Quantity int)xml
+
+				--Insert into Master Table
+				insert into TranMusukMst (MusukID,Code,TransferSlipID,ClientID,IdentificationNo,Destination,TransportType,VehicleNo,ChallanNo,ChallanDate,TransferDate,Remarks,Status,CreateDate,CreatedBy,CompanyID)
+				select xml.MusukID,xml.Code,xml.TransferSlipID,xml.ClientID,xml.IdentificationNo,xml.Destination,xml.TransportType,xml.VehicleNo,xml.ChallanNo,xml.ChallanDate,xml.TransferDate,xml.Remarks,xml.Status,xml.CreateDate,xml.CreatedBy,xml.CompanyID
+				from OPENXML(@hDoc,'//TranMusukMst')	
+				with(MusukID int,Code varchar(10),TransferSlipID int,ClientID int,IdentificationNo varchar(10),Destination varchar(50),TransportType int,VehicleNo varchar(10),ChallanNo varchar(10),ChallanDate datetime,TransferDate datetime,Remarks varchar(200), Status int,CreateDate datetime,CreatedBy int,CompanyID int)xml
+			end
+			COMMIT TRAN SaveTry
+		END TRY
+		
+		BEGIN catch
+		  raiserror('Error', 16, 1)
+		  rollback TRANSACTION SaveTry
+		END catch
+exec sp_xml_removedocument @hDoc
+end  
